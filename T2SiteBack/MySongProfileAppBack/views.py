@@ -8,6 +8,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken
 from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
@@ -16,6 +18,23 @@ from drf_spectacular.utils import OpenApiParameter
 from drf_spectacular.utils import OpenApiTypes
 
 # Create your views here.
+
+def get_user_from_token(request):
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header:
+        return None
+
+    try:
+        token = auth_header.replace('Bearer ', '')
+        access = AccessToken(token)
+
+        user_id = access['user_id']
+
+        return User.objects.get(id=user_id)
+
+    except Exception:
+        return None
 
 
 class CadastrarUsuarioView(APIView):
@@ -57,10 +76,23 @@ class LoginUsuarioView(APIView):
         except User.DoesNotExist:
             return Response({'detail': 'Usuário ou senha inválidos.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        request.session['usuario_id'] = user.id
-        request.session['usuario_username'] = user.username
+        
+        
+        access = AccessToken()
 
-        return Response({'success': True, 'username': user.username}, status=status.HTTP_200_OK)
+        access["user_id"] = user.id
+        access["username"] = user.username
+
+        return Response(
+            {
+                "success": True,
+                "username": user.username,
+                "access": str(access),
+            },
+            status=status.HTTP_200_OK
+
+)
+
 
 
 class LogoutUsuarioView(APIView):
@@ -70,9 +102,13 @@ class LogoutUsuarioView(APIView):
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
+    
     def post(self, request):
-        request.session.flush()
-        return Response({'success': True}, status=status.HTTP_200_OK)
+        return Response(
+            {'success': True},
+            status=status.HTTP_200_OK
+        )
+
 
 
 class PasswordResetView(APIView):
@@ -130,7 +166,7 @@ class PasswordResetView(APIView):
 
 
 class ProfileView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="Exibe o perfil do usuário loggado",
@@ -146,28 +182,19 @@ class ProfileView(APIView):
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
-    def get_user(self):
-        user_id = self.request.session.get('usuario_id')
-
-        if not user_id:
-            return None
-
-        try:
-            return User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return None
-
     def get(self, request):
-        user = self.get_user()
+       
+        user = get_user_from_token(request)
 
-        if not user:
+        if not user.is_authenticated:
+
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         serializer = ProfileSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request):
-        user = self.get_user()
+        user = get_user_from_token(request)
 
         if not user:
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -183,19 +210,11 @@ class ProfileView(APIView):
 
 
 class SongListView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     @method_decorator(csrf_exempt)
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
-
-    def get_user(self, request):
-        user_id = request.session.get('usuario_id')
-
-        if not user_id:
-            return None
-
-        return User.objects.filter(id=user_id).first()
 
     def serialize_songlist(self, songlist):
         songs = []
@@ -214,7 +233,7 @@ class SongListView(APIView):
         return songs
 
     def get(self, request):
-        user = self.get_user(request)
+        user = get_user_from_token(request)
 
         if not user:
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -238,7 +257,7 @@ class SongListView(APIView):
         )
 
     def post(self, request):
-        user = self.get_user(request)
+        user = get_user_from_token(request)
 
         if not user:
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -308,19 +327,12 @@ class SongListView(APIView):
 
 
 class SongListSongDetailView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     @method_decorator(csrf_exempt)
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
-    def get_user(self, request):
-        user_id = request.session.get('usuario_id')
-
-        if not user_id:
-            return None
-
-        return User.objects.filter(id=user_id).first()
 
     def get_song_and_slot(self, user, song_id):
         try:
@@ -336,7 +348,7 @@ class SongListSongDetailView(APIView):
         return songlist, None, None
 
     def put(self, request, song_id):
-        user = self.get_user(request)
+        user = get_user_from_token(request)
 
         if not user:
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -376,8 +388,8 @@ class SongListSongDetailView(APIView):
         )
     
     def delete(self, request, song_id):
-        user = self.get_user(request)
-
+        user = get_user_from_token(request)
+        
         if not user:
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
 
