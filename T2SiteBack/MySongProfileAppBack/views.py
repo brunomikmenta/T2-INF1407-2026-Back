@@ -1,4 +1,4 @@
-from MySongProfileAppBack.serializers import ProfileSerializer, SongSerializer, UserSerializer
+from MySongProfileAppBack.serializers import CreateSongListSerializer, ProfileSerializer, SongSerializer, UserSerializer
 from rest_framework.views import APIView
 from MySongProfileAppBack.models import Song, SongList, User
 from rest_framework.response import Response
@@ -16,8 +16,75 @@ from drf_spectacular.utils import extend_schema
 from drf_spectacular.utils import OpenApiExample
 from drf_spectacular.utils import OpenApiParameter
 from drf_spectacular.utils import OpenApiTypes
+from drf_spectacular.utils import inline_serializer
+from rest_framework import serializers
 
 # Create your views here.
+
+authorization_header_parameter = OpenApiParameter(
+    name='Authorization',
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    required=True,
+    description='Token JWT no formato: Bearer <token>.',
+)
+
+song_list_item_schema = inline_serializer(
+    name='SongListItemSchema',
+    fields={
+        'id': serializers.IntegerField(),
+        'name': serializers.CharField(),
+        'artist': serializers.CharField(),
+        'gender': serializers.CharField(),
+        'slot': serializers.IntegerField(min_value=1, max_value=5),
+    },
+)
+
+detail_response_schema = inline_serializer(
+    name='DetailResponseSchema',
+    fields={
+        'detail': serializers.CharField(),
+    },
+)
+
+song_list_response_schema = inline_serializer(
+    name='SongListResponseSchema',
+    fields={
+        'songs': song_list_item_schema.__class__(many=True),
+        'count': serializers.IntegerField(),
+        'missing': serializers.IntegerField(),
+        'is_complete': serializers.BooleanField(),
+    },
+)
+
+song_list_create_response_schema = inline_serializer(
+    name='SongListCreateResponseSchema',
+    fields={
+        'detail': serializers.CharField(),
+        'songs': song_list_item_schema.__class__(many=True),
+        'count': serializers.IntegerField(),
+        'missing': serializers.IntegerField(),
+        'is_complete': serializers.BooleanField(),
+    },
+)
+
+song_detail_update_response_schema = inline_serializer(
+    name='SongDetailUpdateResponseSchema',
+    fields={
+        'detail': serializers.CharField(),
+        'song': song_list_item_schema,
+    },
+)
+
+song_detail_delete_response_schema = inline_serializer(
+    name='SongDetailDeleteResponseSchema',
+    fields={
+        'detail': serializers.CharField(),
+        'count': serializers.IntegerField(),
+        'missing': serializers.IntegerField(),
+        'is_complete': serializers.BooleanField(),
+    },
+)
 
 
 
@@ -202,20 +269,20 @@ class ProfileView(APIView):
     print("PROFILE VIEW REACHED")
     permission_classes = [AllowAny]
 
-    @extend_schema(
-        summary="Exibe o perfil do usuário loggado",
-        description="Exibe a songlist do usuário, e botões para alternar entre editar a songlist e editar as informações do perfil.",
-        tags=["Perfil"],
-        responses={
-            200: ProfileSerializer,
-            400: "Bad Request"
-        }
-    )
-
     @method_decorator(csrf_exempt)
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
+    @extend_schema(
+        summary='Buscar perfil do usuario autenticado',
+        description='Retorna os dados do perfil do usuario autenticado a partir do token JWT enviado manualmente no cabecalho Authorization.',
+        tags=['Perfil'],
+        parameters=[authorization_header_parameter],
+        responses={
+            200: ProfileSerializer,
+            401: detail_response_schema,
+        },
+    )
     def get(self, request):
        
         user = get_user_from_token(request)
@@ -227,6 +294,30 @@ class ProfileView(APIView):
         serializer = ProfileSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary='Atualizar perfil do usuario autenticado',
+        description='Atualiza parcialmente os dados do perfil do usuario autenticado.',
+        tags=['Perfil'],
+        parameters=[authorization_header_parameter],
+        request=ProfileSerializer,
+        responses={
+            200: ProfileSerializer,
+            400: OpenApiTypes.OBJECT,
+            401: detail_response_schema,
+        },
+        examples=[
+            OpenApiExample(
+                'Atualizacao de perfil',
+                value={
+                    'firstName': 'Bruno',
+                    'lastName': 'Silva',
+                    'gender': 'M',
+                    'email': 'bruno@example.com',
+                },
+                request_only=True,
+            ),
+        ],
+    )
     def put(self, request):
         user = get_user_from_token(request)
 
@@ -265,6 +356,16 @@ class SongListView(APIView):
 
         return songs
 
+    @extend_schema(
+        summary='Listar playlist do usuario autenticado',
+        description='Retorna as musicas ja salvas na playlist do usuario e o estado de completude da lista.',
+        tags=['SongList'],
+        parameters=[authorization_header_parameter],
+        responses={
+            200: song_list_response_schema,
+            401: detail_response_schema,
+        },
+    )
     def get(self, request):
         user = get_user_from_token(request)
 
@@ -289,6 +390,33 @@ class SongListView(APIView):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        summary='Salvar playlist com 5 musicas',
+        description='Cria ou sobrescreve a playlist do usuario autenticado com exatamente 5 musicas.',
+        tags=['SongList'],
+        parameters=[authorization_header_parameter],
+        request=CreateSongListSerializer,
+        responses={
+            201: song_list_create_response_schema,
+            400: detail_response_schema,
+            401: detail_response_schema,
+        },
+        examples=[
+            OpenApiExample(
+                'Playlist completa',
+                value={
+                    'songs': [
+                        {'name': 'Numb', 'artist': 'Linkin Park', 'gender': 'Rock'},
+                        {'name': 'Billie Jean', 'artist': 'Michael Jackson', 'gender': 'Pop'},
+                        {'name': 'Halo', 'artist': 'Beyonce', 'gender': 'Pop'},
+                        {'name': 'Pais e Filhos', 'artist': 'Legiao Urbana', 'gender': 'Rock'},
+                        {'name': 'Alive', 'artist': 'Pearl Jam', 'gender': 'Grunge'},
+                    ],
+                },
+                request_only=True,
+            ),
+        ],
+    )
     def post(self, request):
         user = get_user_from_token(request)
 
@@ -381,6 +509,39 @@ class SongListSongDetailView(APIView):
 
         return songlist, None, None
 
+    @extend_schema(
+        summary='Atualizar musica da playlist',
+        description='Atualiza uma musica especifica da playlist do usuario autenticado usando o id da musica.',
+        tags=['SongList'],
+        parameters=[
+            authorization_header_parameter,
+            OpenApiParameter(
+                name='song_id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                required=True,
+                description='Identificador da musica dentro da playlist do usuario.',
+            ),
+        ],
+        request=SongSerializer,
+        responses={
+            200: song_detail_update_response_schema,
+            400: detail_response_schema,
+            401: detail_response_schema,
+            404: detail_response_schema,
+        },
+        examples=[
+            OpenApiExample(
+                'Atualizacao de musica',
+                value={
+                    'name': 'In the End',
+                    'artist': 'Linkin Park',
+                    'gender': 'Rock',
+                },
+                request_only=True,
+            ),
+        ],
+    )
     def put(self, request, song_id):
         user = get_user_from_token(request)
 
@@ -421,6 +582,26 @@ class SongListSongDetailView(APIView):
             status=status.HTTP_200_OK,
         )
     
+    @extend_schema(
+        summary='Remover musica da playlist',
+        description='Remove uma musica especifica da playlist do usuario autenticado e devolve o novo estado da lista.',
+        tags=['SongList'],
+        parameters=[
+            authorization_header_parameter,
+            OpenApiParameter(
+                name='song_id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                required=True,
+                description='Identificador da musica dentro da playlist do usuario.',
+            ),
+        ],
+        responses={
+            200: song_detail_delete_response_schema,
+            401: detail_response_schema,
+            404: detail_response_schema,
+        },
+    )
     def delete(self, request, song_id):
         user = get_user_from_token(request)
 
