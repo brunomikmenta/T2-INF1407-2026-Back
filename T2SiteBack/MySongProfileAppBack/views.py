@@ -19,22 +19,38 @@ from drf_spectacular.utils import OpenApiTypes
 
 # Create your views here.
 
+
+
 def get_user_from_token(request):
     auth_header = request.headers.get('Authorization')
 
+    print("AUTH HEADER:", auth_header)
+
     if not auth_header:
+        print("NO AUTH HEADER")
         return None
 
     try:
         token = auth_header.replace('Bearer ', '')
+
         access = AccessToken(token)
 
-        user_id = access['user_id']
+        print("TOKEN DATA:", access)
+
+        user_id = int(access["user_id"])
+
+        print("USER ID:", user_id)
+
+        user = User.objects.get(id=user_id)
+
+        print("USER:", user.username)
 
         return User.objects.get(id=user_id)
 
-    except Exception:
+    except Exception as e:
+        print("TOKEN ERROR:", str(e))
         return None
+
 
 
 class CadastrarUsuarioView(APIView):
@@ -77,10 +93,11 @@ class LoginUsuarioView(APIView):
             return Response({'detail': 'Usuário ou senha inválidos.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         
-        
         access = AccessToken()
 
-        access["user_id"] = user.id
+        access.set_exp()
+
+        access["user_id"] = str(user.id)
         access["username"] = user.username
 
         return Response(
