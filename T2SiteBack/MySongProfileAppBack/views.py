@@ -29,24 +29,20 @@ def get_user_from_token(request):
     print("AUTH HEADER:", auth_header)
 
     if not auth_header:
-        print("NO AUTH HEADER")
         return None
 
     try:
         token = auth_header.replace("Bearer ", "")
 
-        print("RAW TOKEN:", token)
-
         access = AccessToken(token)
 
-        print("TOKEN PAYLOAD:", dict(access))
+        print("PAYLOAD:", access.payload)
 
         user_id = access.get("user_id")
 
-        print("USER ID CLAIM:", user_id)
+        print("USER ID:", user_id)
 
         if user_id is None:
-            print("USER_ID MISSING")
             return None
 
         user = User.objects.get(id=int(user_id))
@@ -56,7 +52,6 @@ def get_user_from_token(request):
         return user
 
     except Exception as e:
-        print("TOKEN ERROR TYPE:", type(e))
         print("TOKEN ERROR:", repr(e))
         return None
 
