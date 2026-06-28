@@ -199,6 +199,7 @@ class PasswordResetView(APIView):
 
 
 class ProfileView(APIView):
+    print("PROFILE VIEW REACHED")
     permission_classes = [AllowAny]
 
     @extend_schema(
@@ -359,6 +360,7 @@ class SongListView(APIView):
 
 
 class SongListSongDetailView(APIView):
+    print("SONGLIST VIEW REACHED")
     permission_classes = [AllowAny]
 
     @method_decorator(csrf_exempt)

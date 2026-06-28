@@ -87,14 +87,6 @@ TEMPLATES = [
     },
 ]
 
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'MySongProfileApp API',
-    'DESCRIPTION': 'API do MySongProfileApp',
-    'VERSION': '1.0.0',
-    'SERVERS': [
-    {'url': 'http://localhost:8000'},
-    ],
-}
 
 WSGI_APPLICATION = "T2SiteBack.wsgi.application"
 
@@ -153,13 +145,4 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_SCHEMA_CLASS': (
-        'drf_spectacular.openapi.AutoSchema',
-    )
 }
