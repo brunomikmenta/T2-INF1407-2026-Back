@@ -24,7 +24,7 @@ from drf_spectacular.utils import OpenApiTypes
 def get_user_from_token(request):
     print("GET USER FROM TOKEN CALLED")
 
-    auth_header = request.headers.get('Authorization')
+    auth_header = request.headers.get("Authorization")
 
     print("AUTH HEADER:", auth_header)
 
@@ -33,26 +33,32 @@ def get_user_from_token(request):
         return None
 
     try:
-        token = auth_header.replace('Bearer ', '')
+        token = auth_header.replace("Bearer ", "")
+
+        print("RAW TOKEN:", token)
 
         access = AccessToken(token)
 
-        print("TOKEN DATA:", dict(access))
+        print("TOKEN PAYLOAD:", dict(access))
 
-        user_id = int(access["user_id"])
+        user_id = access.get("user_id")
 
-        print("USER ID:", user_id)
+        print("USER ID CLAIM:", user_id)
 
-        user = User.objects.get(id=user_id)
+        if user_id is None:
+            print("USER_ID MISSING")
+            return None
+
+        user = User.objects.get(id=int(user_id))
 
         print("FOUND USER:", user.username)
 
         return user
 
     except Exception as e:
-        print("TOKEN ERROR:", str(e))
+        print("TOKEN ERROR TYPE:", type(e))
+        print("TOKEN ERROR:", repr(e))
         return None
-
 
 
 class CadastrarUsuarioView(APIView):
