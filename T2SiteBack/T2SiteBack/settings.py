@@ -25,16 +25,14 @@ SECRET_KEY = "django-insecure-7u4a&p1wqp@or2ae@!+q=zzk#%be)e_r&qxd8#+3fu^4xzi&o_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = 'https://t2-inf1407-2026-back.onrender.com'
 
 CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:8080",
-    "http://localhost:8080",
+    "https://t2-inf1407-2026-back.onrender.com",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://127.0.0.1:8080",
-    "http://localhost:8080",
+    "https://t2-inf1407-2026-back.onrender.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -64,7 +62,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
 ]
+    
 
 ROOT_URLCONF = "T2SiteBack.urls"
 
