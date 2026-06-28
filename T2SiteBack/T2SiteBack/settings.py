@@ -25,15 +25,16 @@ SECRET_KEY = "django-insecure-7u4a&p1wqp@or2ae@!+q=zzk#%be)e_r&qxd8#+3fu^4xzi&o_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['https://t2-inf1407-2026-back.onrender.com',
+ALLOWED_HOSTS = [
+    'https://t2-inf1407-2026-back.onrender.com',
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    "https://t2-inf1407-2026-back.onrender.com",
+    "https://mysongprofileappv2.onrender.com/",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://t2-inf1407-2026-back.onrender.com",
+    "https://mysongprofileappv2.onrender.com/",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
