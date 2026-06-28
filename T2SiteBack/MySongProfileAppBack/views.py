@@ -186,7 +186,7 @@ class ProfileView(APIView):
        
         user = get_user_from_token(request)
 
-        if not user.is_authenticated:
+        if not user:
 
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -389,7 +389,7 @@ class SongListSongDetailView(APIView):
     
     def delete(self, request, song_id):
         user = get_user_from_token(request)
-        
+
         if not user:
             return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
 
