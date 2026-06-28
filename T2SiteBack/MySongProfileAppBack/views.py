@@ -23,7 +23,7 @@ from drf_spectacular.utils import OpenApiTypes
 
 def get_user_from_token(request):
     print("GET USER FROM TOKEN CALLED")
-    print("AUTH HEADER:", auth_header)
+
     auth_header = request.headers.get('Authorization')
 
     print("AUTH HEADER:", auth_header)
@@ -37,7 +37,7 @@ def get_user_from_token(request):
 
         access = AccessToken(token)
 
-        print("TOKEN DATA:", access)
+        print("TOKEN DATA:", dict(access))
 
         user_id = int(access["user_id"])
 
@@ -45,9 +45,9 @@ def get_user_from_token(request):
 
         user = User.objects.get(id=user_id)
 
-        print("USER:", user.username)
+        print("FOUND USER:", user.username)
 
-        return User.objects.get(id=user_id)
+        return user
 
     except Exception as e:
         print("TOKEN ERROR:", str(e))
