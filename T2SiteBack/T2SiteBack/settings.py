@@ -35,6 +35,7 @@ CORS_ALLOWED_ORIGINS = [
 
 CSRF_TRUSTED_ORIGINS = [
     "https://mysongprofileappv2.onrender.com",
+    "https://t2-inf1407-2026-back.onrender.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
