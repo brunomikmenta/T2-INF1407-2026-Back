@@ -1,0 +1,8 @@
+Django==4.2.30
+djangorestframework
+pillow
+setuptools
+django-cors-headers
+pyyaml
+drf-spectacular
+djangorestframework-simplejwt

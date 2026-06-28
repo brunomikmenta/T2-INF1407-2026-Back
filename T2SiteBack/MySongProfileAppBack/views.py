@@ -1,0 +1,418 @@
+from MySongProfileAppBack.serializers import ProfileSerializer, SongSerializer, UserSerializer
+from rest_framework.views import APIView
+from MySongProfileAppBack.models import Song, SongList, User
+from rest_framework.response import Response
+from django.shortcuts import render, redirect
+from rest_framework import status
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
+from django.db.models import Q
+from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiExample
+from drf_spectacular.utils import OpenApiParameter
+from drf_spectacular.utils import OpenApiTypes
+
+# Create your views here.
+
+
+class CadastrarUsuarioView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def post(self, request):
+
+        serializer = UserSerializer(data=request.data)
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LoginUsuarioView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def post(self, request):
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '')
+
+        if not username or not password:
+            return Response({'detail': 'Username e password são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(username=username, senha=password)
+        except User.DoesNotExist:
+            return Response({'detail': 'Usuário ou senha inválidos.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        request.session['usuario_id'] = user.id
+        request.session['usuario_username'] = user.username
+
+        return Response({'success': True, 'username': user.username}, status=status.HTTP_200_OK)
+
+
+class LogoutUsuarioView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def post(self, request):
+        request.session.flush()
+        return Response({'success': True}, status=status.HTTP_200_OK)
+
+
+class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+
+        if not email:
+            return Response({'detail': 'E-mail e obrigatorio.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response({'detail': 'E-mail nao encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        signer = TimestampSigner(salt='password-reset')
+        reset_code = signer.sign(str(user.id))
+
+        return Response(
+            {
+                'detail': 'Codigo de redefinicao gerado com sucesso.',
+                'reset_code': reset_code,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request):
+        code = request.data.get('code', '').strip()
+        new_password = request.data.get('new_password', '')
+
+        if not code or not new_password:
+            return Response(
+                {'detail': 'Codigo e nova senha sao obrigatorios.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        signer = TimestampSigner(salt='password-reset')
+        try:
+            user_id = signer.unsign(code, max_age=1800)
+            user = User.objects.get(id=int(user_id))
+        except SignatureExpired:
+            return Response({'detail': 'Codigo expirado.'}, status=status.HTTP_400_BAD_REQUEST)
+        except (BadSignature, ValueError, User.DoesNotExist):
+            return Response({'detail': 'Codigo invalido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.senha = new_password
+        user.save(update_fields=['senha'])
+
+        return Response({'detail': 'Senha alterada com sucesso.'}, status=status.HTTP_200_OK)
+
+
+class ProfileView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Exibe o perfil do usuário loggado",
+        description="Exibe a songlist do usuário, e botões para alternar entre editar a songlist e editar as informações do perfil.",
+        tags=["Perfil"],
+        responses={
+            200: ProfileSerializer,
+            400: "Bad Request"
+        }
+    )
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def get_user(self):
+        user_id = self.request.session.get('usuario_id')
+
+        if not user_id:
+            return None
+
+        try:
+            return User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return None
+
+    def get(self, request):
+        user = self.get_user()
+
+        if not user:
+            return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = ProfileSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        user = self.get_user()
+
+        if not user:
+            return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = ProfileSerializer(user, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            request.session['usuario_username'] = serializer.validated_data.get('username', user.username)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SongListView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def get_user(self, request):
+        user_id = request.session.get('usuario_id')
+
+        if not user_id:
+            return None
+
+        return User.objects.filter(id=user_id).first()
+
+    def serialize_songlist(self, songlist):
+        songs = []
+
+        if not songlist:
+            return songs
+
+        for slot in range(1, 6):
+            song = getattr(songlist, f'song{slot}')
+
+            if song:
+                serialized = SongSerializer(song).data
+                serialized['slot'] = slot
+                songs.append(serialized)
+
+        return songs
+
+    def get(self, request):
+        user = self.get_user(request)
+
+        if not user:
+            return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            songlist = user.songlist
+        except SongList.DoesNotExist:
+            songlist = None
+
+        songs = self.serialize_songlist(songlist)
+        song_count = len(songs)
+
+        return Response(
+            {
+                'songs': songs,
+                'count': song_count,
+                'missing': max(0, 5 - song_count),
+                'is_complete': song_count == 5,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request):
+        user = self.get_user(request)
+
+        if not user:
+            return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        songs_data = request.data.get('songs')
+
+        if not isinstance(songs_data, list) or len(songs_data) != 5:
+            return Response(
+                {'detail': 'A playlist deve conter exatamente 5 musicas.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        validated_songs = []
+
+        for idx, song_data in enumerate(songs_data, start=1):
+            if not isinstance(song_data, dict):
+                return Response(
+                    {'detail': f'Dados invalidos na musica {idx}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            name = str(song_data.get('name', '')).strip()
+            artist = str(song_data.get('artist', '')).strip()
+            gender = str(song_data.get('gender', '')).strip()
+
+            if not name or not artist or not gender:
+                return Response(
+                    {'detail': f'Preencha nome, artista e genero da musica {idx}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            validated_songs.append({'name': name, 'artist': artist, 'gender': gender})
+
+        songlist, _ = SongList.objects.get_or_create(user=user)
+
+        for slot in range(1, 6):
+            setattr(songlist, f'song{slot}', None)
+
+        created_songs = []
+        for slot, song_data in enumerate(validated_songs, start=1):
+            song = Song.objects.create(
+                name=song_data['name'],
+                artist=song_data['artist'],
+                gender=song_data['gender'],
+            )
+            setattr(songlist, f'song{slot}', song)
+            created_songs.append(song)
+
+        songlist.save()
+
+        songs = []
+        for slot, song in enumerate(created_songs, start=1):
+            serialized = SongSerializer(song).data
+            serialized['slot'] = slot
+            songs.append(serialized)
+
+        return Response(
+            {
+                'detail': 'Playlist salva com sucesso.',
+                'songs': songs,
+                'count': 5,
+                'missing': 0,
+                'is_complete': True,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SongListSongDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def get_user(self, request):
+        user_id = request.session.get('usuario_id')
+
+        if not user_id:
+            return None
+
+        return User.objects.filter(id=user_id).first()
+
+    def get_song_and_slot(self, user, song_id):
+        try:
+            songlist = user.songlist
+        except SongList.DoesNotExist:
+            return None, None, None
+
+        for slot in range(1, 6):
+            song = getattr(songlist, f'song{slot}')
+            if song and song.id == song_id:
+                return songlist, song, slot
+
+        return songlist, None, None
+
+    def put(self, request, song_id):
+        user = self.get_user(request)
+
+        if not user:
+            return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        songlist, song, slot = self.get_song_and_slot(user, song_id)
+
+        if not songlist:
+            return Response({'detail': 'Playlist nao encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not song:
+            return Response({'detail': 'Musica nao encontrada na sua playlist.'}, status=status.HTTP_404_NOT_FOUND)
+
+        updated_name = str(request.data.get('name', song.name)).strip()
+        updated_artist = str(request.data.get('artist', song.artist)).strip()
+        updated_gender = str(request.data.get('gender', song.gender)).strip()
+
+        if not updated_name or not updated_artist or not updated_gender:
+            return Response(
+                {'detail': 'Nome, artista e genero sao obrigatorios.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        song.name = updated_name
+        song.artist = updated_artist
+        song.gender = updated_gender
+        song.save(update_fields=['name', 'artist', 'gender'])
+
+        serialized = SongSerializer(song).data
+        serialized['slot'] = slot
+
+        return Response(
+            {
+                'detail': 'Musica atualizada com sucesso.',
+                'song': serialized,
+            },
+            status=status.HTTP_200_OK,
+        )
+    
+    def delete(self, request, song_id):
+        user = self.get_user(request)
+
+        if not user:
+            return Response({'detail': 'Usuario nao autenticado.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        songlist, song, slot = self.get_song_and_slot(user, song_id)
+
+        if not songlist:
+            return Response({'detail': 'Playlist nao encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not song:
+            return Response({'detail': 'Musica nao encontrada na sua playlist.'}, status=status.HTTP_404_NOT_FOUND)
+
+        setattr(songlist, f'song{slot}', None)
+        songlist.save(update_fields=[f'song{slot}'])
+
+        is_song_used_elsewhere = SongList.objects.filter(
+            Q(song1=song) | Q(song2=song) | Q(song3=song) | Q(song4=song) | Q(song5=song)
+        ).exists()
+
+        if not is_song_used_elsewhere:
+            song.delete()
+
+        songlist.refresh_from_db()
+        current_count = sum(
+            1
+            for slot_song in [songlist.song1, songlist.song2, songlist.song3, songlist.song4, songlist.song5]
+            if slot_song is not None
+        )
+
+        return Response(
+            {
+                'detail': 'Musica removida com sucesso.',
+                'count': current_count,
+                'missing': max(0, 5 - current_count),
+                'is_complete': current_count == 5,
+            },
+            status=status.HTTP_200_OK,
+        )
+    
