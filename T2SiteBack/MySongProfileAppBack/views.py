@@ -45,15 +45,21 @@ def get_user_from_token(request):
         if user_id is None:
             return None
 
+        
+        print("TRYING TO FIND USER:", user_id)
+
         user = User.objects.get(id=int(user_id))
 
         print("FOUND USER:", user.username)
 
         return user
 
+    
     except Exception as e:
+        print("TOKEN ERROR TYPE:", type(e))
         print("TOKEN ERROR:", repr(e))
         return None
+
 
 
 class CadastrarUsuarioView(APIView):
@@ -92,6 +98,13 @@ class LoginUsuarioView(APIView):
 
         try:
             user = User.objects.get(username=username, senha=password)
+            
+            print(
+                "LOGIN USER:",
+                user.id,
+                user.username
+            )
+
         except User.DoesNotExist:
             return Response({'detail': 'Usuário ou senha inválidos.'}, status=status.HTTP_401_UNAUTHORIZED)
 
