@@ -22,6 +22,8 @@ from drf_spectacular.utils import OpenApiTypes
 
 
 def get_user_from_token(request):
+    print("GET USER FROM TOKEN CALLED")
+    print("AUTH HEADER:", auth_header)
     auth_header = request.headers.get('Authorization')
 
     print("AUTH HEADER:", auth_header)
@@ -183,7 +185,7 @@ class PasswordResetView(APIView):
 
 
 class ProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     @extend_schema(
         summary="Exibe o perfil do usuário loggado",
@@ -226,7 +228,7 @@ class ProfileView(APIView):
 
 
 class SongListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     @method_decorator(csrf_exempt)
     def dispatch(self, *args, **kwargs):
@@ -343,7 +345,7 @@ class SongListView(APIView):
 
 
 class SongListSongDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     @method_decorator(csrf_exempt)
     def dispatch(self, *args, **kwargs):
